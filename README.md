@@ -424,3 +424,5 @@ Este proyecto fue desarrollado siguiendo las mejores prácticas de arquitectura 
 ![alt text](image-2.png)
 
 ![alt text](image-3.png)
+
+<img width="1525" height="952" alt="image" src="https://github.com/user-attachments/assets/ab0cd694-1ca5-4392-9a9a-3d38d3f20a04" />
