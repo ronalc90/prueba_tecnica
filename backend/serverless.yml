@@ -1,0 +1,212 @@
+service: sports-shop-api
+
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  stage: ${opt:stage, 'dev'}
+  region: us-east-1
+  environment:
+    DYNAMODB_PRODUCTS_TABLE: ${self:service}-products-${self:provider.stage}
+    DYNAMODB_USERS_TABLE: ${self:service}-users-${self:provider.stage}
+    DYNAMODB_CARTS_TABLE: ${self:service}-carts-${self:provider.stage}
+    DYNAMODB_ORDERS_TABLE: ${self:service}-orders-${self:provider.stage}
+    JWT_SECRET: ${env:JWT_SECRET, 'dev-secret-key-change-in-production'}
+    MINIO_ENDPOINT: ${env:MINIO_ENDPOINT, 'localhost'}
+    MINIO_PORT: ${env:MINIO_PORT, '9000'}
+    MINIO_ACCESS_KEY: ${env:MINIO_ACCESS_KEY, 'minioadmin'}
+    MINIO_SECRET_KEY: ${env:MINIO_SECRET_KEY, 'minioadmin'}
+    MINIO_BUCKET: ${env:MINIO_BUCKET, 'sports-images'}
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:Query
+            - dynamodb:Scan
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+          Resource:
+            - "arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.DYNAMODB_PRODUCTS_TABLE}"
+            - "arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.DYNAMODB_USERS_TABLE}"
+            - "arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.DYNAMODB_CARTS_TABLE}"
+            - "arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.DYNAMODB_ORDERS_TABLE}"
+
+functions:
+  register:
+    handler: src/handlers/auth.register
+    events:
+      - http:
+          path: auth/register
+          method: post
+          cors: true
+
+  login:
+    handler: src/handlers/auth.login
+    events:
+      - http:
+          path: auth/login
+          method: post
+          cors: true
+
+  listProducts:
+    handler: src/handlers/products.list
+    events:
+      - http:
+          path: products
+          method: get
+          cors: true
+
+  getProduct:
+    handler: src/handlers/products.get
+    events:
+      - http:
+          path: products/{id}
+          method: get
+          cors: true
+
+  getCart:
+    handler: src/handlers/cart.get
+    events:
+      - http:
+          path: cart
+          method: get
+          cors: true
+
+  addToCart:
+    handler: src/handlers/cart.add
+    events:
+      - http:
+          path: cart
+          method: post
+          cors: true
+
+  removeFromCart:
+    handler: src/handlers/cart.remove
+    events:
+      - http:
+          path: cart/{productId}
+          method: delete
+          cors: true
+
+  checkout:
+    handler: src/handlers/checkout.process
+    timeout: 15
+    events:
+      - http:
+          path: checkout
+          method: post
+          cors: true
+
+  getOrders:
+    handler: src/handlers/orders.list
+    events:
+      - http:
+          path: orders
+          method: get
+          cors: true
+
+resources:
+  Resources:
+    ProductsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.DYNAMODB_PRODUCTS_TABLE}
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+          - AttributeName: category
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: CategoryIndex
+            KeySchema:
+              - AttributeName: category
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+            ProvisionedThroughput:
+              ReadCapacityUnits: 1
+              WriteCapacityUnits: 1
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
+
+    UsersTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.DYNAMODB_USERS_TABLE}
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+          - AttributeName: email
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: EmailIndex
+            KeySchema:
+              - AttributeName: email
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+            ProvisionedThroughput:
+              ReadCapacityUnits: 1
+              WriteCapacityUnits: 1
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
+
+    CartsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.DYNAMODB_CARTS_TABLE}
+        AttributeDefinitions:
+          - AttributeName: userId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: userId
+            KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
+
+    OrdersTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.DYNAMODB_ORDERS_TABLE}
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+          - AttributeName: userId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: UserIdIndex
+            KeySchema:
+              - AttributeName: userId
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+            ProvisionedThroughput:
+              ReadCapacityUnits: 1
+              WriteCapacityUnits: 1
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
+
+plugins:
+  - serverless-offline
+
+custom:
+  serverless-offline:
+    httpPort: 3000
+    lambdaPort: 3002

@@ -1,0 +1,630 @@
+openapi: 3.0.3
+info:
+  title: Sports Shop API
+  description: API REST para sistema de e-commerce de artículos deportivos con arquitectura serverless
+  version: 1.0.0
+  contact:
+    name: Sports Shop API Support
+  license:
+    name: ISC
+
+servers:
+  - url: http://localhost:3000/dev
+    description: Servidor de desarrollo local
+
+tags:
+  - name: Authentication
+    description: Endpoints de autenticación y registro
+  - name: Products
+    description: Gestión de productos deportivos
+  - name: Cart
+    description: Gestión del carrito de compras
+  - name: Checkout
+    description: Proceso de finalización de compra
+  - name: Orders
+    description: Historial de pedidos
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Token JWT obtenido después del login
+
+  schemas:
+    User:
+      type: object
+      required:
+        - id
+        - email
+        - name
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        email:
+          type: string
+          format: email
+          example: "user@example.com"
+        name:
+          type: string
+          example: "John Doe"
+        address:
+          type: string
+          example: "123 Main St, City, Country"
+        createdAt:
+          type: string
+          format: date-time
+
+    Product:
+      type: object
+      required:
+        - id
+        - name
+        - category
+        - price
+        - stock
+      properties:
+        id:
+          type: string
+          example: "prod-001"
+        name:
+          type: string
+          example: "Professional Soccer Ball"
+        category:
+          type: string
+          example: "soccer"
+        price:
+          type: number
+          format: float
+          example: 29.99
+        stock:
+          type: integer
+          minimum: 0
+          example: 50
+        description:
+          type: string
+          example: "Official size and weight soccer ball for professional play"
+        image:
+          type: string
+          format: uri
+          example: "https://images.unsplash.com/photo-1511886929837-354d827aae26"
+
+    CartItem:
+      type: object
+      required:
+        - productId
+        - name
+        - price
+        - quantity
+      properties:
+        productId:
+          type: string
+          example: "prod-001"
+        name:
+          type: string
+          example: "Professional Soccer Ball"
+        price:
+          type: number
+          format: float
+          example: 29.99
+        quantity:
+          type: integer
+          minimum: 1
+          example: 2
+        image:
+          type: string
+          format: uri
+
+    Cart:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CartItem'
+        total:
+          type: number
+          format: float
+          example: 59.98
+        updatedAt:
+          type: string
+          format: date-time
+
+    Order:
+      type: object
+      required:
+        - id
+        - userId
+        - items
+        - total
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        userEmail:
+          type: string
+          format: email
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CartItem'
+        total:
+          type: number
+          format: float
+        shippingAddress:
+          type: string
+        paymentMethod:
+          type: string
+          enum: [credit_card, debit_card, paypal]
+        status:
+          type: string
+          enum: [pending, completed, cancelled]
+          default: completed
+        createdAt:
+          type: string
+          format: date-time
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          properties:
+            message:
+              type: string
+              example: "Error message"
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+
+paths:
+  /auth/register:
+    post:
+      tags:
+        - Authentication
+      summary: Registrar nuevo usuario
+      description: Crea una nueva cuenta de usuario en el sistema
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+                - name
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: "newuser@example.com"
+                password:
+                  type: string
+                  format: password
+                  minLength: 6
+                  example: "password123"
+                name:
+                  type: string
+                  minLength: 2
+                  example: "John Doe"
+                address:
+                  type: string
+                  example: "123 Main St"
+      responses:
+        '200':
+          description: Usuario registrado exitosamente
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          user:
+                            $ref: '#/components/schemas/User'
+                          token:
+                            type: string
+                            example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        '400':
+          description: Datos inválidos o email ya registrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: Iniciar sesión
+      description: Autentica un usuario y devuelve un token JWT
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: "user@example.com"
+                password:
+                  type: string
+                  format: password
+                  example: "password123"
+      responses:
+        '200':
+          description: Login exitoso
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          user:
+                            $ref: '#/components/schemas/User'
+                          token:
+                            type: string
+        '400':
+          description: Credenciales inválidas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /products:
+    get:
+      tags:
+        - Products
+      summary: Listar productos
+      description: Obtiene una lista paginada de productos con filtros opcionales
+      parameters:
+        - name: page
+          in: query
+          description: Número de página
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          description: Productos por página
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+        - name: category
+          in: query
+          description: Filtrar por categoría
+          schema:
+            type: string
+            enum: [soccer, basketball, tennis, running, yoga, boxing, swimming, cycling, golf, baseball, volleyball, fitness, skateboarding, football, hockey]
+        - name: search
+          in: query
+          description: Búsqueda por texto en nombre y descripción
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Lista de productos obtenida exitosamente
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          products:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/Product'
+                          pagination:
+                            type: object
+                            properties:
+                              page:
+                                type: integer
+                                example: 1
+                              limit:
+                                type: integer
+                                example: 10
+                              total:
+                                type: integer
+                                example: 15
+                              totalPages:
+                                type: integer
+                                example: 2
+        '400':
+          description: Parámetros inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /products/{id}:
+    get:
+      tags:
+        - Products
+      summary: Obtener producto por ID
+      description: Obtiene los detalles completos de un producto específico
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID del producto
+          schema:
+            type: string
+            example: "prod-001"
+      responses:
+        '200':
+          description: Producto obtenido exitosamente
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Product'
+        '404':
+          description: Producto no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /cart:
+    get:
+      tags:
+        - Cart
+      summary: Obtener carrito del usuario
+      description: Obtiene el carrito de compras actual del usuario autenticado
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Carrito obtenido exitosamente
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Cart'
+        '401':
+          description: No autenticado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags:
+        - Cart
+      summary: Agregar producto al carrito
+      description: Agrega un producto al carrito del usuario autenticado o actualiza la cantidad si ya existe
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - productId
+                - quantity
+              properties:
+                productId:
+                  type: string
+                  example: "prod-001"
+                quantity:
+                  type: integer
+                  minimum: 1
+                  example: 2
+      responses:
+        '200':
+          description: Producto agregado exitosamente
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Cart'
+        '400':
+          description: Datos inválidos o producto no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: No autenticado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /cart/{productId}:
+    delete:
+      tags:
+        - Cart
+      summary: Eliminar producto del carrito
+      description: Elimina un producto específico del carrito del usuario autenticado
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          description: ID del producto a eliminar
+          schema:
+            type: string
+            example: "prod-001"
+      responses:
+        '200':
+          description: Producto eliminado exitosamente
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Cart'
+        '400':
+          description: Producto no encontrado en el carrito
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: No autenticado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /checkout:
+    post:
+      tags:
+        - Checkout
+      summary: Procesar compra
+      description: |
+        Finaliza el proceso de compra:
+        - Valida disponibilidad de stock
+        - Actualiza el inventario
+        - Crea la orden
+        - Limpia el carrito
+        - Envía email de confirmación (con timeout para evitar bloqueos)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - shippingAddress
+                - paymentMethod
+              properties:
+                shippingAddress:
+                  type: string
+                  example: "123 Main St, City, Country"
+                paymentMethod:
+                  type: string
+                  enum: [credit_card, debit_card, paypal]
+                  example: "credit_card"
+      responses:
+        '200':
+          description: Compra procesada exitosamente
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          order:
+                            $ref: '#/components/schemas/Order'
+                          message:
+                            type: string
+                            example: "Order completed successfully"
+                          emailPreview:
+                            type: string
+                            format: uri
+                            description: URL para ver el email de confirmación (solo en desarrollo)
+                            example: "https://ethereal.email/message/xxx"
+        '400':
+          description: Carrito vacío o stock insuficiente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: No autenticado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /orders:
+    get:
+      tags:
+        - Orders
+      summary: Obtener historial de pedidos
+      description: Obtiene todas las órdenes del usuario autenticado ordenadas por fecha
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Historial obtenido exitosamente
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          orders:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/Order'
+        '401':
+          description: No autenticado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
